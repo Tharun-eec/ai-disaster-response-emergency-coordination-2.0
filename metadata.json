@@ -1,0 +1,7 @@
+{
+  "name": "AI Disaster Response & Emergency Coordination System",
+  "description": "A real-time emergency coordination platform connecting citizens, emergency responders, hospitals, volunteers, and command centers with AI assistance.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
