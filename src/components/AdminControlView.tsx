@@ -9,6 +9,7 @@ import {
   SeverityLevel,
   DisasterType
 } from '../types';
+import { apiUrl } from '../config';
 import {
   Activity,
   AlertTriangle,
@@ -106,7 +107,7 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
   const handleGenerateSmartDispatch = async (incidentId: string) => {
     setSmartDispatchLoading(true);
     try {
-      const res = await fetch('/api/ai/dispatch-recommendation', {
+      const res = await fetch(apiUrl('/api/ai/dispatch-recommendation'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ incidentId })
@@ -132,7 +133,7 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
 
     setIsBroadcasting(true);
     try {
-      await fetch('/api/alerts', {
+      await fetch(apiUrl('/api/alerts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

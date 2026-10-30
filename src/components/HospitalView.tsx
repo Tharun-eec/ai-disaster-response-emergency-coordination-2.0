@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Hospital, Incident } from '../types';
+import { apiUrl } from '../config';
 import {
   Hospital as HospitalIcon,
   HeartPulse,
@@ -49,7 +50,7 @@ export const HospitalView: React.FC<HospitalViewProps> = ({
   // Save hospital updates to backend
   const handleSaveHospital = async () => {
     try {
-      const res = await fetch(`/api/hospitals/${selectedHospitalId}`, {
+      const res = await fetch(apiUrl(`/api/hospitals/${selectedHospitalId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

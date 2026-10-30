@@ -11,6 +11,7 @@ import {
   DisasterType
 } from '../types';
 import { translations } from '../data/translations';
+import { apiUrl } from '../config';
 import {
   AlertOctagon,
   MapPin,
@@ -176,7 +177,7 @@ export const CitizenView: React.FC<CitizenViewProps> = ({
       setAnalyzingImage(true);
 
       try {
-        const res = await fetch('/api/ai/image-analysis', {
+        const res = await fetch(apiUrl('/api/ai/image-analysis'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64 })
@@ -235,7 +236,7 @@ export const CitizenView: React.FC<CitizenViewProps> = ({
   const handleMissingPersonSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await fetch('/api/missing-persons', {
+      await fetch(apiUrl('/api/missing-persons'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,7 +269,7 @@ export const CitizenView: React.FC<CitizenViewProps> = ({
 
     setAiLoading(true);
     try {
-      const res = await fetch('/api/ai/assistant', {
+      const res = await fetch(apiUrl('/api/ai/assistant'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q, language: activeLanguage })

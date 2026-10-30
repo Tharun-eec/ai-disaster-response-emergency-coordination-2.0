@@ -24,6 +24,7 @@ import {
   initialRoutes,
   initialDisasterZones
 } from '../data/seedData';
+import { apiUrl } from '../config';
 
 export function useDisasterState() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -48,7 +49,7 @@ export function useDisasterState() {
   // Fetch initial state
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch('/api/state');
+      const res = await fetch(apiUrl('/api/state'));
       if (res.ok) {
         const data = await res.json();
         setIncidents(data.incidents || []);
@@ -99,7 +100,7 @@ export function useDisasterState() {
     // Setup SSE connection
     let eventSource: EventSource | null = null;
     try {
-      eventSource = new EventSource('/api/events');
+      eventSource = new EventSource(apiUrl('/api/events'));
       eventSource.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
@@ -223,7 +224,7 @@ export function useDisasterState() {
     }
 
     try {
-      const res = await fetch('/api/incidents', {
+      const res = await fetch(apiUrl('/api/incidents'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(incidentData)
@@ -241,7 +242,7 @@ export function useDisasterState() {
   // Update Incident Status
   const updateIncidentStatus = async (id: string, status: Incident['status']) => {
     try {
-      const res = await fetch(`/api/incidents/${id}/status`, {
+      const res = await fetch(apiUrl(`/api/incidents/${id}/status`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -258,7 +259,7 @@ export function useDisasterState() {
   // Assign responder
   const assignResponder = async (incidentId: string, responderId: string) => {
     try {
-      const res = await fetch(`/api/incidents/${incidentId}/assign`, {
+      const res = await fetch(apiUrl(`/api/incidents/${incidentId}/assign`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ responderId })
@@ -282,7 +283,7 @@ export function useDisasterState() {
     senderName = 'Citizen'
   ) => {
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(apiUrl('/api/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -307,7 +308,7 @@ export function useDisasterState() {
   const triggerSimulation = async () => {
     setIsSimulating(true);
     try {
-      await fetch('/api/simulation/start', { method: 'POST' });
+      await fetch(apiUrl('/api/simulation/start'), { method: 'POST' });
     } catch (err) {
       console.error(err);
     } finally {
@@ -318,7 +319,7 @@ export function useDisasterState() {
   // Reset Simulation
   const resetSimulation = async () => {
     try {
-      await fetch('/api/simulation/reset', { method: 'POST' });
+      await fetch(apiUrl('/api/simulation/reset'), { method: 'POST' });
     } catch (err) {
       console.error(err);
     }
