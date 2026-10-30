@@ -27,17 +27,18 @@ import {
 import { apiUrl } from '../config';
 
 export function useDisasterState() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [responders, setResponders] = useState<Responder[]>([]);
-  const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [shelters, setShelters] = useState<Shelter[]>([]);
-  const [missingPersons, setMissingPersons] = useState<MissingPerson[]>([]);
-  const [resources, setResources] = useState<EmergencyResource[]>([]);
-  const [alerts, setAlerts] = useState<EmergencyAlert[]>([]);
-  const [routes, setRoutes] = useState<EmergencyRoute[]>([]);
-  const [zones, setZones] = useState<DisasterZone[]>([]);
+  // Initialize with seed data immediately so the website opens instantly in 0ms without blank screens
+  const [incidents, setIncidents] = useState<Incident[]>(() => initialIncidents);
+  const [responders, setResponders] = useState<Responder[]>(() => initialResponders);
+  const [hospitals, setHospitals] = useState<Hospital[]>(() => initialHospitals);
+  const [shelters, setShelters] = useState<Shelter[]>(() => initialShelters);
+  const [missingPersons, setMissingPersons] = useState<MissingPerson[]>(() => initialMissingPersons);
+  const [resources, setResources] = useState<EmergencyResource[]>(() => initialResources);
+  const [alerts, setAlerts] = useState<EmergencyAlert[]>(() => initialAlerts);
+  const [routes, setRoutes] = useState<EmergencyRoute[]>(() => initialRoutes);
+  const [zones, setZones] = useState<DisasterZone[]>(() => initialDisasterZones);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isOfflineModeSimulated, setIsOfflineModeSimulated] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
@@ -46,22 +47,26 @@ export function useDisasterState() {
   const [notification, setNotification] = useState<{ title: string; message: string; type: 'critical' | 'info' | 'success' } | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
 
-  // Fetch initial state
+  // Fetch initial state with rapid 4.5s timeout so spinning Render backend never blocks or hangs the app
   const fetchState = useCallback(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+
     try {
-      const res = await fetch(apiUrl('/api/state'));
+      const res = await fetch(apiUrl('/api/state'), { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
-        setIncidents(data.incidents || []);
-        setResponders(data.responders || []);
-        setHospitals(data.hospitals || []);
-        setShelters(data.shelters || []);
-        setMissingPersons(data.missingPersons || []);
-        setResources(data.resources || []);
-        setAlerts(data.alerts || []);
-        setRoutes(data.routes || []);
-        setZones(data.zones || []);
-        setChatMessages(data.chatMessages || []);
+        if (data.incidents?.length) setIncidents(data.incidents);
+        if (data.responders?.length) setResponders(data.responders);
+        if (data.hospitals?.length) setHospitals(data.hospitals);
+        if (data.shelters?.length) setShelters(data.shelters);
+        if (data.missingPersons?.length) setMissingPersons(data.missingPersons);
+        if (data.resources?.length) setResources(data.resources);
+        if (data.alerts?.length) setAlerts(data.alerts);
+        if (data.routes?.length) setRoutes(data.routes);
+        if (data.zones?.length) setZones(data.zones);
+        if (data.chatMessages?.length) setChatMessages(data.chatMessages);
 
         // Cache critical offline data into localStorage
         try {
@@ -73,17 +78,9 @@ export function useDisasterState() {
         }
       }
     } catch {
-      // Fallback to initial seed data so the UI renders immediately without error
-      setIncidents(initialIncidents);
-      setResponders(initialResponders);
-      setHospitals(initialHospitals);
-      setShelters(initialShelters);
-      setMissingPersons(initialMissingPersons);
-      setResources(initialResources);
-      setAlerts(initialAlerts);
-      setRoutes(initialRoutes);
-      setZones(initialDisasterZones);
+      // Gracefully continue using instantaneous local seed state - no error thrown
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, []);
@@ -257,20 +254,76 @@ export function useDisasterState() {
   };
 
   // Assign responder
-  const assignResponder = async (incidentId: string, responderId: string) => {
+  const assignResponder = async (
+    incidentId: string,
+    responderId: string,
+    claimedBy?: string
+  ): Promise<{ success: boolean; message?: string }> => {
     try {
       const res = await fetch(apiUrl(`/api/incidents/${incidentId}/assign`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ responderId })
+        body: JSON.stringify({ responderId, claimedBy })
       });
+
       if (res.ok) {
         const data = await res.json();
         setIncidents((prev) => prev.map((i) => (i.id === incidentId ? data.incident : i)));
         setResponders((prev) => prev.map((r) => (r.id === responderId ? data.responder : r)));
+        showNotification(
+          '🛡️ UNIT DISPATCHED',
+          `Unit ${data.responder?.name || responderId} successfully assigned to ${incidentId}.`,
+          'success'
+        );
+        return { success: true };
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        const errorMsg = errData.error || `Dispatch assignment failed with status ${res.status}`;
+        showNotification('ASSIGNMENT FAILED', errorMsg, 'critical');
+        return { success: false, message: errorMsg };
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.warn('Backend assign request error, applying resilient local assignment fallback:', err);
+      // Resilient fallback when backend is unreachable or offline
+      let targetIncident: Incident | undefined;
+      let targetResponder: Responder | undefined;
+
+      setIncidents((prev) => {
+        return prev.map((i) => {
+          if (i.id === incidentId) {
+            targetIncident = {
+              ...i,
+              assignedResponderId: responderId,
+              status: 'RESPONDER_ASSIGNED',
+              claimedBy: claimedBy || i.claimedBy,
+              updatedAt: new Date().toISOString()
+            };
+            return targetIncident;
+          }
+          return i;
+        });
+      });
+
+      setResponders((prev) => {
+        return prev.map((r) => {
+          if (r.id === responderId) {
+            targetResponder = {
+              ...r,
+              status: 'DISPATCHED',
+              currentIncidentId: incidentId
+            };
+            return targetResponder;
+          }
+          return r;
+        });
+      });
+
+      showNotification(
+        '🛡️ UNIT DISPATCHED (OFFLINE / LOCAL)',
+        `Unit ${responderId} assigned to ${incidentId}.`,
+        'success'
+      );
+      return { success: true };
     }
   };
 

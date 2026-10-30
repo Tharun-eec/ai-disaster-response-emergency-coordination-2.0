@@ -276,13 +276,30 @@ async function startServer() {
   // Assign responder to incident
   app.post('/api/incidents/:id/assign', (req, res) => {
     const { id } = req.params;
-    const { responderId } = req.body;
+    const { responderId, claimedBy } = req.body;
 
     const incident = incidents.find((i) => i.id === id);
     const responder = responders.find((r) => r.id === responderId);
 
-    if (!incident || !responder) {
-      return res.status(404).json({ error: 'Incident or Responder not found' });
+    if (!incident) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+    if (!responder) {
+      return res.status(404).json({ error: 'Selected rescue unit not found' });
+    }
+
+    // Check if incident is already claimed or resolved
+    if (incident.assignedResponderId && incident.assignedResponderId !== responder.id) {
+      return res.status(409).json({
+        error: `Incident is already claimed by ${incident.assignedResponderName || incident.assignedResponderId}`
+      });
+    }
+
+    // Check whether the unit is already dispatched to another active incident
+    if (responder.status !== 'AVAILABLE' && responder.currentIncidentId && responder.currentIncidentId !== incident.id) {
+      return res.status(400).json({
+        error: `Unit ${responder.name} is currently ${responder.status} on incident ${responder.currentIncidentId}. Please select an available unit.`
+      });
     }
 
     incident.assignedResponderId = responder.id;
@@ -290,6 +307,9 @@ async function startServer() {
     incident.status = 'RESPONDER_ASSIGNED';
     incident.etaMinutes = Math.floor(5 + Math.random() * 10);
     incident.updatedAt = new Date().toISOString();
+    if (claimedBy) {
+      incident.claimedBy = claimedBy;
+    }
 
     responder.status = 'DISPATCHED';
     responder.currentIncidentId = incident.id;

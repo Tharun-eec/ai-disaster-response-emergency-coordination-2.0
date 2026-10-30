@@ -42,6 +42,8 @@ interface AdminControlViewProps {
   onAssignResponder: (incidentId: string, responderId: string) => void;
   onUpdateStatus: (id: string, status: Incident['status']) => void;
   onSelectIncident: (inc: Incident) => void;
+  isDemoAdmin?: boolean;
+  onExitAdminDemo?: () => void;
 }
 
 export const AdminControlView: React.FC<AdminControlViewProps> = ({
@@ -53,7 +55,9 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
   alerts,
   onAssignResponder,
   onUpdateStatus,
-  onSelectIncident
+  onSelectIncident,
+  isDemoAdmin = true,
+  onExitAdminDemo
 }) => {
   // Filters
   const [filterSeverity, setFilterSeverity] = useState<string>('ALL');
@@ -156,6 +160,42 @@ export const AdminControlView: React.FC<AdminControlViewProps> = ({
 
   return (
     <div className="w-full space-y-6">
+      {/* DEMO ADMIN MODE HEADER INDICATOR (Requirement 3) */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/80 via-slate-900 to-indigo-950/80 border-2 border-purple-500/40 shadow-xl flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            <Shield className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/50 text-purple-200 text-xs font-black tracking-wider uppercase flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                Demo Admin Mode
+              </span>
+              <span className="text-xs text-slate-300 font-bold">
+                Unrestricted One-Click Demonstration Access
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1 max-w-2xl">
+              Academic demo access enabled. Full operational controls, live triage dispatch, AI recommendations, and alert broadcasting are active without password verification.
+              <span className="text-amber-400/90 ml-1">
+                (Unrestricted demo feature — not production identity verification).
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {onExitAdminDemo && (
+          <button
+            id="btn-exit-demo-admin"
+            onClick={onExitAdminDemo}
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors shadow-sm"
+          >
+            Exit Demo Admin Mode
+          </button>
+        )}
+      </div>
+
       {/* 1. TOP LIVE KPI METRICS BAR (Section 5 & 10 Requirement) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Metric 1: Active Incidents */}

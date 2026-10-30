@@ -20,7 +20,11 @@ interface ResponderViewProps {
   responders: Responder[];
   chatMessages: ChatMessage[];
   onUpdateIncidentStatus: (id: string, status: Incident['status']) => void;
+  onAssignResponder: (incidentId: string, responderId: string, claimedBy?: string) => Promise<{ success: boolean; message?: string }>;
   onSendMessage: (text: string, channel: ChatMessage['channel'], incidentId?: string, isPreset?: boolean, name?: string) => void;
+  isLoggedIn?: boolean;
+  loggedInUser?: string | null;
+  onOpenLoginModal?: (prompt?: string) => void;
 }
 
 export const ResponderView: React.FC<ResponderViewProps> = ({
@@ -28,7 +32,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   responders,
   chatMessages,
   onUpdateIncidentStatus,
-  onSendMessage
+  onAssignResponder,
+  onSendMessage,
+  isLoggedIn = false,
+  loggedInUser = null,
+  onOpenLoginModal
 }) => {
   // Current logged in responder profile selection
   const [selectedResponderId, setSelectedResponderId] = useState<string>(
@@ -36,6 +44,10 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
   );
   const [chatText, setChatText] = useState('');
   const [activeIncidentChat, setActiveIncidentChat] = useState<string | null>(null);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
+  const [dispatchSuccess, setDispatchSuccess] = useState<string | null>(null);
+  const [pendingClaimIncidentId, setPendingClaimIncidentId] = useState<string | null>(null);
+  const [isClaiming, setIsClaiming] = useState<string | null>(null);
 
   const currentResponder = responders.find((r) => r.id === selectedResponderId) || responders[0];
 
@@ -60,6 +72,60 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
       currentResponder?.name || 'Rescue Unit'
     );
     setChatText('');
+  };
+
+  const handleClaimDispatch = async (incident: Incident) => {
+    setDispatchError(null);
+    setDispatchSuccess(null);
+
+    // Gated by Demo Login
+    if (!isLoggedIn) {
+      setPendingClaimIncidentId(incident.id);
+      return;
+    }
+
+    if (!currentResponder) {
+      setDispatchError('No active rescue unit selected.');
+      return;
+    }
+
+    // Check if unit is available
+    if (currentResponder.status !== 'AVAILABLE' && currentResponder.currentIncidentId !== incident.id) {
+      setDispatchError(
+        `Selected unit "${currentResponder.name}" is currently ${currentResponder.status}. Please switch to an available unit (e.g. EMS Trauma or Mountain Rescue Alpha) or wait for current mission completion.`
+      );
+      return;
+    }
+
+    // Check if already claimed
+    if (incident.assignedResponderId) {
+      setDispatchError(
+        `This incident has already been assigned to ${incident.assignedResponderName || incident.assignedResponderId}.`
+      );
+      return;
+    }
+
+    setIsClaiming(incident.id);
+    try {
+      const result = await onAssignResponder(
+        incident.id,
+        currentResponder.id,
+        loggedInUser || 'Demo Responder'
+      );
+
+      if (result.success) {
+        setDispatchSuccess(
+          `Successfully claimed and dispatched ${currentResponder.name} to ${incident.id} (${incident.title})!`
+        );
+        setTimeout(() => setDispatchSuccess(null), 5000);
+      } else {
+        setDispatchError(result.message || 'Failed to dispatch unit to this emergency.');
+      }
+    } catch (err: any) {
+      setDispatchError(err?.message || 'Unexpected network error during dispatch.');
+    } finally {
+      setIsClaiming(null);
+    }
   };
 
   return (
@@ -176,6 +242,11 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
                     <span className="text-xs text-slate-400 block">Reported Civilian:</span>
                     <span className="text-xs font-bold text-slate-200">{inc.reportedBy.name}</span>
                     <span className="text-xs text-indigo-400 block">{inc.reportedBy.phone}</span>
+                    {inc.claimedBy && (
+                      <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Claimed by: {inc.claimedBy}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -256,32 +327,140 @@ export const ResponderView: React.FC<ResponderViewProps> = ({
         )}
       </div>
 
+      {/* Global Dispatch Notification Banners */}
+      {dispatchSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="font-semibold">{dispatchSuccess}</span>
+          </div>
+          <button
+            onClick={() => setDispatchSuccess(null)}
+            className="text-emerald-400 hover:text-emerald-200"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {dispatchError && (
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-300 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            <span>{dispatchError}</span>
+          </div>
+          <button
+            onClick={() => setDispatchError(null)}
+            className="text-rose-400 hover:text-rose-200 font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Pending Login Required Prompt for Claim & Dispatch */}
+      {pendingClaimIncidentId && !isLoggedIn && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 shadow-xl flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-200">
+                Authentication Required to Claim & Dispatch
+              </h4>
+              <p className="text-xs text-amber-300/80 mt-0.5">
+                Please log in to claim and dispatch emergency incidents.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPendingClaimIncidentId(null)}
+              className="px-3 py-1.5 rounded-xl text-xs text-slate-400 hover:text-slate-200 bg-slate-800"
+            >
+              Dismiss
+            </button>
+            <button
+              id="btn-login-to-claim"
+              onClick={() => {
+                if (onOpenLoginModal) {
+                  onOpenLoginModal('Please log in to claim and dispatch emergency incidents.');
+                }
+              }}
+              className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 shadow-md shadow-amber-950 transition-all flex items-center gap-1.5"
+            >
+              Login Now
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Unassigned Emergencies - Claim / Self-Dispatch */}
       {unassignedIncidents.length > 0 && (
         <div className="space-y-3 pt-4 border-t border-slate-800">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <LifeBuoy className="w-4 h-4 text-amber-400" />
-            Unassigned Emergencies Requiring Field Units ({unassignedIncidents.length})
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+              <LifeBuoy className="w-4 h-4 text-amber-400" />
+              Unassigned Emergencies Requiring Field Units ({unassignedIncidents.length})
+            </h3>
+            <div className="text-xs text-slate-400">
+              Active Unit: <span className="font-semibold text-indigo-300">{currentResponder?.name}</span> ({currentResponder?.status})
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            {unassignedIncidents.map((inc) => (
-              <div key={inc.id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-rose-400 font-bold">{inc.id}</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white">
-                    {inc.severity}
-                  </span>
+            {unassignedIncidents.map((inc) => {
+              const isSelectedUnitAvailable = currentResponder?.status === 'AVAILABLE';
+              const isThisClaiming = isClaiming === inc.id;
+
+              return (
+                <div key={inc.id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2 relative">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-rose-400 font-bold">{inc.id}</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white">
+                      {inc.severity}
+                    </span>
+                  </div>
+                  <div className="font-bold text-slate-100">{inc.title}</div>
+                  <div className="text-slate-400 text-[11px] flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    {inc.location.address}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Trapped: <span className="text-red-400 font-semibold">{inc.trappedCount}</span> | Injured: <span className="text-amber-400 font-semibold">{inc.injuredCount}</span>
+                  </div>
+
+                  <button
+                    id={`btn-claim-dispatch-${inc.id}`}
+                    disabled={isThisClaiming}
+                    onClick={() => handleClaimDispatch(inc)}
+                    className={`w-full py-2.5 rounded-xl font-bold text-xs mt-2 transition-all flex items-center justify-center gap-1.5 shadow-md ${
+                      !isSelectedUnitAvailable && isLoggedIn
+                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                        : 'bg-gradient-to-r from-indigo-600 to-rose-600 hover:from-indigo-500 hover:to-rose-500 text-white shadow-indigo-950 active:scale-98'
+                    }`}
+                    title={
+                      !isLoggedIn
+                        ? 'Login required to claim this incident'
+                        : !isSelectedUnitAvailable
+                        ? `Unit ${currentResponder?.name} is currently ${currentResponder?.status}. Click to view status notice or switch units.`
+                        : `Claim and dispatch ${currentResponder?.name}`
+                    }
+                  >
+                    <LifeBuoy className={`w-3.5 h-3.5 ${isThisClaiming ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isThisClaiming
+                        ? 'Dispatching Unit...'
+                        : !isSelectedUnitAvailable && isLoggedIn
+                        ? `Claim & Dispatch Unit (${currentResponder?.status})`
+                        : 'Claim & Dispatch Unit'}
+                    </span>
+                  </button>
                 </div>
-                <div className="font-bold text-slate-100">{inc.title}</div>
-                <div className="text-slate-400 text-[11px]">{inc.location.address}</div>
-                <button
-                  onClick={() => onUpdateIncidentStatus(inc.id, 'RESPONDER_ASSIGNED')}
-                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs mt-2 transition-colors"
-                >
-                  Claim & Dispatch Unit
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

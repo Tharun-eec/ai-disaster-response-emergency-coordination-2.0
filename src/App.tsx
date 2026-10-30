@@ -9,6 +9,7 @@ import { AdminControlView } from './components/AdminControlView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { OfflineHandbookModal } from './components/OfflineHandbookModal';
 import { EmergencyContactsModal } from './components/EmergencyContactsModal';
+import { DemoLoginModal } from './components/DemoLoginModal';
 import { translations } from './data/translations';
 import { UserRole, LanguageCode } from './types';
 import {
@@ -30,7 +31,10 @@ import {
   Map as MapIcon,
   Bell,
   X,
-  AlertTriangle
+  AlertTriangle,
+  LogIn,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 
 export default function App() {
@@ -70,6 +74,54 @@ export default function App() {
   const [showContacts, setShowContacts] = useState(false);
   const [showTacticalMap, setShowTacticalMap] = useState(true);
 
+  // Demo Login System State (Persistent via localStorage)
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [loginPromptReason, setLoginPromptReason] = useState<string | null>(null);
+  const [loggedInUser, setLoggedInUser] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('demo_logged_in_user');
+    } catch {
+      return null;
+    }
+  });
+
+  // One-Click Demo Admin Mode state
+  const [isDemoAdminActive, setIsDemoAdminActive] = useState(false);
+
+  const handleDemoLogin = (username: string) => {
+    setLoggedInUser(username);
+    try {
+      localStorage.setItem('demo_logged_in_user', username);
+    } catch {
+      // ignore
+    }
+    setNotification({
+      title: 'DEMO LOGIN SUCCESSFUL',
+      message: `Welcome, ${username}. Ready for rapid field & rescue operations.`,
+      type: 'success'
+    });
+  };
+
+  const handleDemoLogout = () => {
+    const prev = loggedInUser;
+    setLoggedInUser(null);
+    try {
+      localStorage.removeItem('demo_logged_in_user');
+    } catch {
+      // ignore
+    }
+    setNotification({
+      title: 'LOGGED OUT',
+      message: `Demo session for ${prev || 'user'} has ended.`,
+      type: 'info'
+    });
+  };
+
+  const openLoginModalWithPrompt = (promptMsg?: string) => {
+    setLoginPromptReason(promptMsg || null);
+    setIsLoginModalOpen(true);
+  };
+
   const t = translations[activeLanguage] || translations.en;
 
   const roleNavItems: { role: UserRole; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -77,7 +129,7 @@ export default function App() {
     { role: 'responder', label: t.responder || 'Responder', icon: Shield },
     { role: 'hospital', label: t.hospital || 'Hospital', icon: Hospital },
     { role: 'volunteer', label: t.volunteer || 'Volunteer', icon: Heart },
-    { role: 'admin', label: t.admin || 'Command Room', icon: LayoutDashboard },
+    { role: 'admin', label: t.admin || 'Control Room / Admin', icon: LayoutDashboard },
     { role: 'analytics', label: 'Analytics & Insights', icon: BarChart3 }
   ];
 
@@ -168,8 +220,37 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quick Lifeline Actions: Hotlines, Handbook, Map Toggle, Language */}
+          {/* Quick Lifeline Actions: Demo Login, Hotlines, Handbook, Map Toggle, Language */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Demo Login / User Session in Header (Requirement 2 & 6) */}
+            {loggedInUser ? (
+              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-700/80 px-2.5 py-1 rounded-xl text-xs">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[10px] uppercase font-bold text-slate-400">Demo User:</span>
+                <span className="font-bold text-slate-100 max-w-[120px] truncate" title={loggedInUser}>
+                  {loggedInUser}
+                </span>
+                <button
+                  id="btn-demo-logout"
+                  onClick={handleDemoLogout}
+                  className="ml-1 p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                  title="Logout from Demo Session"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                id="btn-demo-login-header"
+                onClick={() => openLoginModalWithPrompt()}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-rose-600 hover:from-indigo-500 hover:to-rose-500 text-white shadow-md shadow-indigo-950 flex items-center gap-1.5 transition-all active:scale-95 border border-indigo-400/40"
+                title="Open Demo Login Modal (any non-empty username/password)"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Demo Login</span>
+              </button>
+            )}
+
             {/* Map Toggle Button */}
             <button
               onClick={() => setShowTacticalMap(!showTacticalMap)}
@@ -249,7 +330,13 @@ export default function App() {
               <button
                 key={item.role}
                 id={`role-tab-${item.role}`}
-                onClick={() => setActiveRole(item.role)}
+                onClick={() => {
+                  if (item.role === 'admin') {
+                    // One-Click Demo Admin Mode directly entered (Requirement 3)
+                    setIsDemoAdminActive(true);
+                  }
+                  setActiveRole(item.role);
+                }}
                 className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-2 whitespace-nowrap transition-all border ${
                   isActive
                     ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white border-rose-400/50 shadow-lg shadow-rose-950/50'
@@ -258,6 +345,11 @@ export default function App() {
               >
                 <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                 <span>{item.label}</span>
+                {item.role === 'admin' && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    DEMO
+                  </span>
+                )}
               </button>
             );
           })}
@@ -307,7 +399,11 @@ export default function App() {
             responders={responders}
             chatMessages={chatMessages}
             onUpdateIncidentStatus={updateIncidentStatus}
+            onAssignResponder={assignResponder}
             onSendMessage={sendChatMessage}
+            isLoggedIn={Boolean(loggedInUser)}
+            loggedInUser={loggedInUser}
+            onOpenLoginModal={openLoginModalWithPrompt}
           />
         )}
 
@@ -337,6 +433,11 @@ export default function App() {
             onAssignResponder={assignResponder}
             onUpdateStatus={updateIncidentStatus}
             onSelectIncident={setSelectedIncident}
+            isDemoAdmin={isDemoAdminActive}
+            onExitAdminDemo={() => {
+              setIsDemoAdminActive(false);
+              setActiveRole('citizen');
+            }}
           />
         )}
 
@@ -372,6 +473,17 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* Demo Login Modal Dialog (Requirement 2 & 4) */}
+      <DemoLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => {
+          setIsLoginModalOpen(false);
+          setLoginPromptReason(null);
+        }}
+        onSuccess={handleDemoLogin}
+        defaultPromptMessage={loginPromptReason}
+      />
 
       {/* Offline Survival Handbook Modal */}
       <OfflineHandbookModal

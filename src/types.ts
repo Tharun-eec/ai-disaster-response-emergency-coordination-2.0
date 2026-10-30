@@ -69,6 +69,7 @@ export interface Incident {
   isSOS?: boolean;
   clusterId?: string;
   clusterCount?: number;
+  claimedBy?: string;
 }
 
 export interface Responder {
